@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>GPS Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --border: #1e1e2e;
+    --accent: #00ff88;
+    --accent-dim: #00ff8830;
+    --accent-glow: #00ff8860;
+    --warn: #ff6b35;
+    --warn-dim: #ff6b3520;
+    --text: #e8e8f0;
+    --text-muted: #666680;
+    --radius: 16px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+  }
+
+  /* ── GRID BG ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,255,136,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,136,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .screen {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100dvh;
+    padding: 24px 20px;
+    gap: 32px;
+  }
+
+  .screen.hidden { display: none; }
+
+  /* ── LOGIN ── */
+  .logo {
+    text-align: center;
+  }
+
+  .logo-icon {
+    width: 72px;
+    height: 72px;
+    border-radius: 24px;
+    background: var(--accent-dim);
+    border: 1px solid var(--accent-glow);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 16px;
+    box-shadow: 0 0 40px var(--accent-dim);
+  }
+
+  .logo-icon svg {
+    width: 36px;
+    height: 36px;
+    color: var(--accent);
+  }
+
+  .logo h1 {
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    color: var(--text);
+  }
+
+  .logo p {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    margin-top: 6px;
+  }
+
+  .card {
+    width: 100%;
+    max-width: 380px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .field label {
+    display: block;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+  }
+
+  .field input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-size: 16px;
+    font-family: 'Syne', sans-serif;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .field input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+  }
+
+  .field input::placeholder { color: var(--text-muted); }
+
+  .config-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .btn {
+    width: 100%;
+    padding: 16px;
+    border-radius: 12px;
+    border: none;
+    font-family: 'Syne', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.3px;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #0a0a0f;
+    box-shadow: 0 0 30px var(--accent-dim);
+  }
+
+  .btn-primary:hover { box-shadow: 0 0 40px var(--accent-glow); transform: translateY(-1px); }
+  .btn-primary:active { transform: translateY(0); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  /* ── TRACKER ── */
+  #tracker {
+    justify-content: flex-start;
+    padding-top: 48px;
+  }
+
+  .user-header {
+    text-align: center;
+    width: 100%;
+  }
+
+  .user-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-muted);
+  }
+
+  .user-badge strong { color: var(--text); font-weight: 600; }
+
+  /* ── STATUS RING ── */
+  .status-ring-wrap {
+    position: relative;
+    width: 180px;
+    height: 180px;
+    margin: 8px 0;
+  }
+
+  .status-ring-wrap svg {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+  }
+
+  .ring-track { fill: none; stroke: var(--border); stroke-width: 4; }
+  .ring-fill {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 4;
+    stroke-linecap: round;
+    stroke-dasharray: 502;
+    stroke-dashoffset: 502;
+    transition: stroke-dashoffset 0.5s ease, stroke 0.4s;
+    filter: drop-shadow(0 0 6px var(--accent));
+  }
+
+  .ring-fill.warn { stroke: var(--warn); filter: drop-shadow(0 0 6px var(--warn)); }
+
+  .ring-center {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+  }
+
+  .ring-countdown {
+    font-size: 42px;
+    font-weight: 800;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--accent);
+    line-height: 1;
+    transition: color 0.4s;
+  }
+
+  .ring-countdown.warn { color: var(--warn); }
+  .ring-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  /* ── STATUS BADGE ── */
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 18px;
+    border-radius: 100px;
+    font-size: 13px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    transition: all 0.3s;
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .status-badge.idle {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+  }
+  .status-badge.idle .status-dot { background: var(--text-muted); }
+
+  .status-badge.tracking {
+    background: var(--accent-dim);
+    border: 1px solid var(--accent-glow);
+    color: var(--accent);
+  }
+  .status-badge.tracking .status-dot {
+    background: var(--accent);
+    box-shadow: 0 0 0 0 var(--accent);
+    animation: pulse 1.5s infinite;
+  }
+
+  .status-badge.sending {
+    background: rgba(99,102,241,0.15);
+    border: 1px solid rgba(99,102,241,0.4);
+    color: #818cf8;
+  }
+  .status-badge.sending .status-dot { background: #818cf8; animation: pulse-blue 0.8s infinite; }
+
+  .status-badge.error {
+    background: var(--warn-dim);
+    border: 1px solid rgba(255,107,53,0.4);
+    color: var(--warn);
+  }
+  .status-badge.error .status-dot { background: var(--warn); }
+
+  @keyframes pulse {
+    0%,100% { box-shadow: 0 0 0 0 rgba(0,255,136,0.6); }
+    50% { box-shadow: 0 0 0 6px rgba(0,255,136,0); }
+  }
+  @keyframes pulse-blue {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* ── GPS INFO CARD ── */
+  .gps-card {
+    width: 100%;
+    max-width: 380px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .gps-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .gps-key {
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .gps-val {
+    font-size: 13px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  .gps-val.accent { color: var(--accent); }
+
+  .divider {
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── LOG ── */
+  .log-wrap {
+    width: 100%;
+    max-width: 380px;
+  }
+
+  .log-title {
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+  }
+
+  .log {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    max-height: 140px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .log-item {
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-muted);
+    display: flex;
+    gap: 10px;
+    animation: fadeIn 0.3s ease;
+  }
+
+  .log-item .time { color: var(--text-muted); flex-shrink: 0; }
+  .log-item .msg { color: var(--text); }
+  .log-item.ok .msg { color: var(--accent); }
+  .log-item.err .msg { color: var(--warn); }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; } }
+
+  /* ── CONTROLS ── */
+  .controls {
+    width: 100%;
+    max-width: 380px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .btn-control {
+    padding: 14px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-control:hover { border-color: var(--accent); color: var(--accent); }
+
+  .btn-control.active {
+    background: var(--accent-dim);
+    border-color: var(--accent-glow);
+    color: var(--accent);
+  }
+
+  .btn-control.danger:hover { border-color: var(--warn); color: var(--warn); }
+
+  /* ── PAUSED overlay ── */
+  .paused-badge {
+    display: none;
+    position: absolute;
+    inset: 0;
+    align-items: center;
+    justify-content: center;
+    background: rgba(10,10,15,0.7);
+    border-radius: 50%;
+    font-size: 13px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--warn);
+    letter-spacing: 1px;
+  }
+  .paused-badge.show { display: flex; }
+</style>
+</head>
+<body>
+
+<!-- ══ LOGIN ══ -->
+<div class="screen" id="login">
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="11" r="3"/>
+        <path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+      </svg>
+    </div>
+    <h1>GPS Tracker</h1>
+    <p>// airtable sync</p>
+  </div>
+
+  <div class="card" id="configCard">
+    <div class="field">
+      <label>Tu nombre / alias</label>
+      <input type="text" id="username" placeholder="Escribe tu nombre..." autocomplete="off">
+    </div>
+    <div class="field">
+      <label>ID del evento</label>
+      <input type="text" id="eventoId" placeholder="Escribe el ID del evento..." autocomplete="off">
+    </div>
+    <button class="btn btn-primary" id="startBtn" onclick="startTracking()">Iniciar tracking</button>
+  </div>
+</div>
+
+<!-- ══ TRACKER ══ -->
+<div class="screen hidden" id="tracker">
+
+  <div class="user-header">
+    <div class="user-badge">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+      </svg>
+      <strong id="displayName">—</strong>
+    </div>
+  </div>
+
+  <div class="status-ring-wrap">
+    <svg viewBox="0 0 180 180">
+      <circle class="ring-track" cx="90" cy="90" r="80"/>
+      <circle class="ring-fill" id="ringFill" cx="90" cy="90" r="80"/>
+    </svg>
+    <div class="ring-center">
+      <div class="ring-countdown" id="countdown">—</div>
+      <div class="ring-label" id="ringLabel">seg</div>
+    </div>
+    <div class="paused-badge" id="pausedBadge">PAUSADO</div>
+  </div>
+
+  <div class="status-badge idle" id="statusBadge">
+    <span class="status-dot"></span>
+    <span id="statusText">Iniciando...</span>
+  </div>
+
+  <div class="gps-card">
+    <div class="gps-row">
+      <span class="gps-key">Latitud</span>
+      <span class="gps-val accent" id="dispLat">—</span>
+    </div>
+    <div class="gps-row">
+      <span class="gps-key">Longitud</span>
+      <span class="gps-val accent" id="dispLng">—</span>
+    </div>
+    <div class="divider"></div>
+    <div class="gps-row">
+      <span class="gps-key">Precisión</span>
+      <span class="gps-val" id="dispAcc">—</span>
+    </div>
+    <div class="gps-row">
+      <span class="gps-key">Último envío</span>
+      <span class="gps-val" id="dispLast">—</span>
+    </div>
+    <div class="gps-row">
+      <span class="gps-key">Envíos OK</span>
+      <span class="gps-val" id="dispCount">0</span>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn-control" id="pauseBtn" onclick="togglePause()">⏸ Pausar</button>
+    <button class="btn-control danger" onclick="stopTracking()">✕ Salir</button>
+  </div>
+
+  <div class="log-wrap">
+    <div class="log-title">// registro de eventos</div>
+    <div class="log" id="logContainer"></div>
+  </div>
+
+</div>
+
+<script>
+  // ── Config ──
+  const AIRTABLE_TABLE = 'UBICACIONES';
+  const FIELD_USUARIO  = 'Usuario';
+  const FIELD_COORDS   = 'COORDENADAS';
+  const FIELD_TS       = 'Timestamp';
+  const FIELD_EVENTO   = 'ID DEL EVENTO';
+
+  // ← Cambia esta URL por la de tu Cloudflare Worker una vez desplegado
+  const WORKER_URL  = 'https://ancient-glitter-810b.avacac.workers.dev';
+  const intervalSec = 30;
+
+  let username, eventoId;
+  let timerTick, countdownTick;
+  let remaining = 0;
+  let paused = false;
+  let sendCount = 0;
+  let lastCoords = null;
+
+  const CIRCUMFERENCE = 2 * Math.PI * 80; // 502.65
+
+  function startTracking() {
+    username = document.getElementById('username').value.trim();
+    eventoId = document.getElementById('eventoId').value.trim();
+
+    if (!username || !eventoId) {
+      shake(document.getElementById('configCard'));
+      return;
+    }
+
+    document.getElementById('login').classList.add('hidden');
+    document.getElementById('tracker').classList.remove('hidden');
+    document.getElementById('displayName').textContent = username;
+
+    setStatus('tracking', 'Obteniendo GPS...');
+    sendAndSchedule();
+  }
+
+  async function sendAndSchedule() {
+    if (paused) return;
+    await sendPosition();
+    startCountdown();
+  }
+
+  function startCountdown() {
+    clearInterval(timerTick);
+    clearInterval(countdownTick);
+    remaining = intervalSec;
+    updateRing(remaining);
+
+    countdownTick = setInterval(() => {
+      if (paused) return;
+      remaining--;
+      updateRing(remaining);
+      if (remaining <= 0) {
+        clearInterval(countdownTick);
+        sendAndSchedule();
+      }
+    }, 1000);
+  }
+
+  function updateRing(sec) {
+    const pct = sec / intervalSec;
+    const offset = CIRCUMFERENCE * (1 - pct);
+    const ring = document.getElementById('ringFill');
+    const cntEl = document.getElementById('countdown');
+    ring.style.strokeDashoffset = offset;
+
+    const isWarn = sec <= 5 && sec > 0;
+    ring.classList.toggle('warn', isWarn);
+    cntEl.classList.toggle('warn', isWarn);
+    cntEl.textContent = sec;
+  }
+
+  async function sendPosition() {
+    setStatus('tracking', 'Localizando...');
+    logEvent('info', 'Solicitando posición GPS...');
+
+    try {
+      const pos = await getGPS();
+      const { latitude: lat, longitude: lng, accuracy: acc } = pos.coords;
+      lastCoords = { lat, lng, acc };
+
+      document.getElementById('dispLat').textContent = lat.toFixed(6);
+      document.getElementById('dispLng').textContent = lng.toFixed(6);
+      document.getElementById('dispAcc').textContent = `±${Math.round(acc)} m`;
+
+      const coordStr = `${lat},${lng}`;
+      const now = new Date().toISOString();
+
+      setStatus('sending', 'Enviando a Airtable...');
+      logEvent('info', `Coord: ${coordStr.substring(0,20)}...`);
+
+      await pushToAirtable(coordStr, now);
+
+      sendCount++;
+      document.getElementById('dispCount').textContent = sendCount;
+      const timeStr = new Date().toLocaleTimeString('es-ES');
+      document.getElementById('dispLast').textContent = timeStr;
+
+      setStatus('tracking', 'Tracking activo');
+      logEvent('ok', `✓ Enviado a las ${timeStr}`);
+
+    } catch (err) {
+      setStatus('error', err.message || 'Error desconocido');
+      logEvent('err', `✗ ${err.message}`);
+      // retry after interval anyway
+    }
+  }
+
+  function getGPS() {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error('GPS no disponible'));
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(resolve, (e) => {
+        const msgs = {
+          1: 'Permiso GPS denegado',
+          2: 'Posición no disponible',
+          3: 'Timeout GPS'
+        };
+        reject(new Error(msgs[e.code] || 'Error GPS'));
+      }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+    });
+  }
+
+  async function pushToAirtable(coordStr, isoTime) {
+    const fields = {
+      [FIELD_USUARIO]: username,
+      [FIELD_COORDS]:  coordStr,
+      [FIELD_TS]:      isoTime,
+      [FIELD_EVENTO]:  eventoId
+    };
+
+    // 1. Buscar si ya existe un registro para este usuario
+    const searchRes = await fetch(`${WORKER_URL}/buscar?usuario=${encodeURIComponent(username)}`);
+    if (!searchRes.ok) {
+      const d = await searchRes.json().catch(() => ({}));
+      throw new Error(d?.error?.message || `HTTP ${searchRes.status}`);
+    }
+    const searchData = await searchRes.json();
+    const existing = searchData.records?.[0];
+
+    let res;
+    if (existing) {
+      // Existe → PATCH (actualizar)
+      res = await fetch(`${WORKER_URL}/actualizar/${existing.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields })
+      });
+    } else {
+      // No existe → POST (crear)
+      res = await fetch(`${WORKER_URL}/crear`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields })
+      });
+    }
+
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      throw new Error(d?.error?.message || `HTTP ${res.status}`);
+    }
+  }
+
+  function togglePause() {
+    paused = !paused;
+    const btn = document.getElementById('pauseBtn');
+    const badge = document.getElementById('pausedBadge');
+    if (paused) {
+      btn.textContent = '▶ Reanudar';
+      btn.classList.add('active');
+      badge.classList.add('show');
+      setStatus('idle', 'Pausado');
+      logEvent('info', 'Tracking pausado');
+    } else {
+      btn.textContent = '⏸ Pausar';
+      btn.classList.remove('active');
+      badge.classList.remove('show');
+      setStatus('tracking', 'Tracking activo');
+      logEvent('info', 'Tracking reanudado');
+      sendAndSchedule();
+    }
+  }
+
+  function stopTracking() {
+    clearInterval(timerTick);
+    clearInterval(countdownTick);
+    document.getElementById('tracker').classList.add('hidden');
+    document.getElementById('login').classList.remove('hidden');
+    paused = false;
+    sendCount = 0;
+    document.getElementById('logContainer').innerHTML = '';
+    document.getElementById('pauseBtn').textContent = '⏸ Pausar';
+    document.getElementById('pauseBtn').classList.remove('active');
+    document.getElementById('pausedBadge').classList.remove('show');
+  }
+
+  function setStatus(type, text) {
+    const badge = document.getElementById('statusBadge');
+    badge.className = `status-badge ${type}`;
+    document.getElementById('statusText').textContent = text;
+  }
+
+  function logEvent(type, msg) {
+    const container = document.getElementById('logContainer');
+    const time = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const item = document.createElement('div');
+    item.className = `log-item ${type === 'ok' ? 'ok' : type === 'err' ? 'err' : ''}`;
+    item.innerHTML = `<span class="time">${time}</span><span class="msg">${msg}</span>`;
+    container.prepend(item);
+    // keep last 30
+    while (container.children.length > 30) container.removeChild(container.lastChild);
+  }
+
+  function shake(el) {
+    el.style.animation = 'none';
+    el.style.transform = 'translateX(0)';
+    let s = 0;
+    const id = setInterval(() => {
+      el.style.transform = `translateX(${s % 2 === 0 ? 6 : -6}px)`;
+      if (++s > 6) { clearInterval(id); el.style.transform = 'translateX(0)'; }
+    }, 60);
+  }
+
+  // Keep screen on (Wake Lock API)
+  async function requestWakeLock() {
+    try {
+      if ('wakeLock' in navigator) {
+        await navigator.wakeLock.request('screen');
+      }
+    } catch (_) {}
+  }
+  requestWakeLock();
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') requestWakeLock();
+  });
+</script>
+</body>
+</html>
