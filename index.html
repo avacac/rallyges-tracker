@@ -33,7 +33,6 @@
     overflow-x: hidden;
   }
 
-  /* ── GRID BG ── */
   body::before {
     content: '';
     position: fixed;
@@ -60,9 +59,18 @@
 
   .screen.hidden { display: none; }
 
-  /* ── LOGIN ── */
   .logo {
     text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .logo img {
+    max-width: 260px;
+    width: 100%;
+    margin-bottom: 4px;
   }
 
   .logo-icon {
@@ -74,7 +82,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 0 auto 16px;
+    margin: 0 auto 8px;
     box-shadow: 0 0 40px var(--accent-dim);
   }
 
@@ -84,18 +92,10 @@
     color: var(--accent);
   }
 
-  .logo h1 {
-    font-size: 28px;
-    font-weight: 800;
-    letter-spacing: -0.5px;
-    color: var(--text);
-  }
-
   .logo p {
     font-size: 13px;
     color: var(--text-muted);
     font-family: 'JetBrains Mono', monospace;
-    margin-top: 6px;
   }
 
   .card {
@@ -169,7 +169,6 @@
   .btn-primary:active { transform: translateY(0); }
   .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 
-  /* ── TRACKER ── */
   #tracker {
     justify-content: flex-start;
     padding-top: 48px;
@@ -195,7 +194,6 @@
 
   .user-badge strong { color: var(--text); font-weight: 600; }
 
-  /* ── STATUS RING ── */
   .status-ring-wrap {
     position: relative;
     width: 180px;
@@ -251,7 +249,6 @@
     letter-spacing: 1px;
   }
 
-  /* ── STATUS BADGE ── */
   .status-badge {
     display: inline-flex;
     align-items: center;
@@ -312,7 +309,6 @@
     50% { opacity: 0.3; }
   }
 
-  /* ── GPS INFO CARD ── */
   .gps-card {
     width: 100%;
     max-width: 380px;
@@ -353,7 +349,6 @@
     background: var(--border);
   }
 
-  /* ── LOG ── */
   .log-wrap {
     width: 100%;
     max-width: 380px;
@@ -396,7 +391,6 @@
 
   @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; } }
 
-  /* ── CONTROLS ── */
   .controls {
     width: 100%;
     max-width: 380px;
@@ -428,7 +422,6 @@
 
   .btn-control.danger:hover { border-color: var(--warn); color: var(--warn); }
 
-  /* ── PAUSED overlay ── */
   .paused-badge {
     display: none;
     position: absolute;
@@ -456,8 +449,7 @@
         <path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
       </svg>
     </div>
-    <h1>RALLYGES</h1>
-    <h1>GPS Tracker</h1>
+    <img src="260202 logo alargado.png" alt="RALLYGES" style="max-width: 260px; width: 100%; margin-top: 4px;">
     <p>© POWERED BY RALLYGES</p>
   </div>
 
@@ -540,14 +532,12 @@
 </div>
 
 <script>
-  // ── Config ──
   const AIRTABLE_TABLE = 'UBICACIONES';
   const FIELD_USUARIO  = 'Usuario';
   const FIELD_COORDS   = 'COORDENADAS';
   const FIELD_TS       = 'Timestamp';
   const FIELD_EVENTO   = 'ID DEL EVENTO';
 
-  // ← Cambia esta URL por la de tu Cloudflare Worker una vez desplegado
   const WORKER_URL  = 'https://ancient-glitter-810b.avacac.workers.dev';
   const intervalSec = 30;
 
@@ -558,7 +548,7 @@
   let sendCount = 0;
   let lastCoords = null;
 
-  const CIRCUMFERENCE = 2 * Math.PI * 80; // 502.65
+  const CIRCUMFERENCE = 2 * Math.PI * 80;
 
   function startTracking() {
     username = document.getElementById('username').value.trim();
@@ -645,7 +635,6 @@
     } catch (err) {
       setStatus('error', err.message || 'Error desconocido');
       logEvent('err', `✗ ${err.message}`);
-      // retry after interval anyway
     }
   }
 
@@ -674,7 +663,6 @@
       [FIELD_EVENTO]:  eventoId
     };
 
-    // 1. Buscar si ya existe un registro para este usuario
     const searchRes = await fetch(`${WORKER_URL}/buscar?usuario=${encodeURIComponent(username)}`);
     if (!searchRes.ok) {
       const d = await searchRes.json().catch(() => ({}));
@@ -685,14 +673,12 @@
 
     let res;
     if (existing) {
-      // Existe → PATCH (actualizar)
       res = await fetch(`${WORKER_URL}/actualizar/${existing.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields })
       });
     } else {
-      // No existe → POST (crear)
       res = await fetch(`${WORKER_URL}/crear`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -752,7 +738,6 @@
     item.className = `log-item ${type === 'ok' ? 'ok' : type === 'err' ? 'err' : ''}`;
     item.innerHTML = `<span class="time">${time}</span><span class="msg">${msg}</span>`;
     container.prepend(item);
-    // keep last 30
     while (container.children.length > 30) container.removeChild(container.lastChild);
   }
 
@@ -766,7 +751,6 @@
     }, 60);
   }
 
-  // Keep screen on (Wake Lock API)
   async function requestWakeLock() {
     try {
       if ('wakeLock' in navigator) {
