@@ -461,10 +461,6 @@
       <label>Tu nombre / Alias / Función</label>
       <input type="text" id="username" placeholder="Escribe tu nombre..." autocomplete="off">
     </div>
-    <div class="field">
-      <label>ID del evento</label>
-      <input type="text" id="eventoId" placeholder="Escribe el ID del evento..." autocomplete="off">
-    </div>
     <button class="btn btn-primary" id="startBtn" onclick="startTracking()">Iniciar tracking</button>
   </div>
 </div>
@@ -551,14 +547,22 @@
   let sendCount = 0;
   let lastCoords = null;
 
+  // Leer eventoId desde la URL (?evento=...)
+  const urlParams = new URLSearchParams(window.location.search);
+  eventoId = urlParams.get('evento') || '';
+
   const CIRCUMFERENCE = 2 * Math.PI * 80;
 
   function startTracking() {
     username = document.getElementById('username').value.trim();
-    eventoId = document.getElementById('eventoId').value.trim();
 
-    if (!username || !eventoId) {
+    if (!username) {
       shake(document.getElementById('configCard'));
+      return;
+    }
+
+    if (!eventoId) {
+      alert('No se ha especificado un ID de evento en la URL.\nUsa: ?evento=TU-ID-EVENTO');
       return;
     }
 
