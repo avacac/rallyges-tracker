@@ -452,8 +452,8 @@
       </svg>
     </div>
     <img src="260202 logo alargado.png" alt="RALLYGES">
-    <h1>RALLYGES GPS Tracker</h1>
-    <p>© POWERED BY RALLYGES V2.0</p>
+    <h1>GPS Tracker</h1>
+    <p>© POWERED BY RALLYGES</p>
   </div>
 
   <div class="card" id="configCard">
@@ -551,6 +551,14 @@
   const urlParams = new URLSearchParams(window.location.search);
   eventoId = urlParams.get('evento') || '';
 
+  // Recuperar nombre guardado
+  window.addEventListener('DOMContentLoaded', () => {
+    const savedName = localStorage.getItem('rallyges_username');
+    if (savedName) {
+      document.getElementById('username').value = savedName;
+    }
+  });
+
   const CIRCUMFERENCE = 2 * Math.PI * 80;
 
   function startTracking() {
@@ -565,6 +573,9 @@
       alert('No se ha especificado un ID de evento en la URL.\nUsa: ?evento=TU-ID-EVENTO');
       return;
     }
+
+    // Guardar nombre para próximas visitas
+    localStorage.setItem('rallyges_username', username);
 
     document.getElementById('login').classList.add('hidden');
     document.getElementById('tracker').classList.remove('hidden');
