@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>RALLYGES GPS Tracker</title>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;700;800&family=Bungee:wght@400;700;800&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #0a0a0f;
@@ -134,8 +134,8 @@
     border: 1px solid var(--border);
     border-radius: 10px;
     padding: 14px 16px;
-    font-size: 16px;
-    font-family: 'Syne', sans-serif;
+    font-size: 18px;
+    font-family: 'Bungee', sans-serif;
     color: var(--text);
     outline: none;
     transition: border-color 0.2s, box-shadow 0.2s;
@@ -453,7 +453,7 @@
     </div>
     <img src="260202 logo alargado.png" alt="RALLYGES">
     <h1>GPS Tracker</h1>
-    <p>© POWERED BY RALLYGES V1.0</p>
+    <p>© POWERED BY RALLYGES v2.2</p>
   </div>
 
   <div class="card" id="configCard">
@@ -462,8 +462,8 @@
       <input type="text" id="username" placeholder="Escribe tu nombre..." autocomplete="off">
     </div>
     <div class="field">
-      <label>ID del evento</label>
-      <input type="text" id="eventoId" placeholder="Escribe el ID del evento..." autocomplete="off">
+      <label>Teléfono de Contacto</label>
+      <input type="tel" id="telefono" placeholder="Escribe tu teléfono..." autocomplete="off">
     </div>
     <button class="btn btn-primary" id="startBtn" onclick="startTracking()">Iniciar tracking</button>
   </div>
@@ -540,27 +540,50 @@
   const FIELD_COORDS   = 'COORDENADAS';
   const FIELD_TS       = 'Timestamp';
   const FIELD_EVENTO   = 'ID DEL EVENTO';
+  const FIELD_TELEFONO = 'Teléfono de Contacto';
+  const FIELD_TIPO     = 'Tipo';
 
   const WORKER_URL  = 'https://ancient-glitter-810b.avacac.workers.dev';
   const intervalSec = 30;
 
-  let username, eventoId;
+  let username, eventoId, telefono;
   let timerTick, countdownTick;
   let remaining = 0;
   let paused = false;
   let sendCount = 0;
   let lastCoords = null;
 
+  // Leer eventoId desde la URL (?evento=...)
+  const urlParams = new URLSearchParams(window.location.search);
+  eventoId = urlParams.get('evento') || '';
+
+  // Recuperar nombre y teléfono guardados
+  window.addEventListener('DOMContentLoaded', () => {
+    const savedName = localStorage.getItem('rallyges_username');
+    if (savedName) document.getElementById('username').value = savedName;
+    const savedPhone = localStorage.getItem('rallyges_telefono');
+    if (savedPhone) document.getElementById('telefono').value = savedPhone;
+  });
+
   const CIRCUMFERENCE = 2 * Math.PI * 80;
 
   function startTracking() {
     username = document.getElementById('username').value.trim();
-    eventoId = document.getElementById('eventoId').value.trim();
+    telefono = document.getElementById('telefono').value.trim();
 
-    if (!username || !eventoId) {
+    if (!username || !telefono) {
       shake(document.getElementById('configCard'));
       return;
     }
+
+    if (!eventoId) {
+      alert('No se ha especificado un ID de evento en la URL.\nUsa: ?evento=TU-ID-EVENTO');
+      return;
+    }
+
+    // Guardar nombre y teléfono para próximas visitas
+    localStorage.setItem('rallyges_username', username);
+    localStorage.setItem('rallyges_telefono', telefono);
 
     document.getElementById('login').classList.add('hidden');
     document.getElementById('tracker').classList.remove('hidden');
@@ -660,10 +683,12 @@
 
   async function pushToAirtable(coordStr, isoTime) {
     const fields = {
-      [FIELD_USUARIO]: username,
-      [FIELD_COORDS]:  coordStr,
-      [FIELD_TS]:      isoTime,
-      [FIELD_EVENTO]:  eventoId
+      [FIELD_USUARIO]:  username,
+      [FIELD_COORDS]:   coordStr,
+      [FIELD_TS]:       isoTime,
+      [FIELD_EVENTO]:   eventoId,
+      [FIELD_TELEFONO]: telefono,
+      [FIELD_TIPO]:     'STAFF'
     };
 
     // Buscar por la combinación usuario + evento
@@ -679,14 +704,12 @@
 
     let res;
     if (existing) {
-      // Par usuario+evento ya existe → PATCH (actualizar)
       res = await fetch(`${WORKER_URL}/actualizar/${existing.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields })
       });
     } else {
-      // Par usuario+evento no existe → POST (crear nuevo)
       res = await fetch(`${WORKER_URL}/crear`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
