@@ -438,9 +438,71 @@
     letter-spacing: 1px;
   }
   .paused-badge.show { display: flex; }
+
+  /* ── EVENTO CERRADO ── */
+  #eventoCerrado {
+    background: #c0392b;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    padding: 24px 20px;
+    text-align: center;
+  }
+
+  .cerrado-icon {
+    width: 80px;
+    height: 80px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .cerrado-icon svg {
+    width: 44px;
+    height: 44px;
+    color: #ffffff;
+  }
+
+  .cerrado-logo img {
+    max-width: 240px;
+    width: 100%;
+  }
+
+  .cerrado-titulo {
+    font-size: 24px;
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: -0.5px;
+  }
+
+  .cerrado-nombre {
+    font-size: 16px;
+    color: rgba(255,255,255,0.8);
+    font-family: 'JetBrains Mono', monospace;
+  }
 </style>
 </head>
 <body>
+
+<!-- ══ EVENTO CERRADO ══ -->
+<div class="hidden" id="eventoCerrado">
+  <div class="cerrado-icon">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+    </svg>
+  </div>
+  <div class="cerrado-logo">
+    <img src="260202 logo alargado.png" alt="RALLYGES">
+  </div>
+  <div class="cerrado-titulo">ESTE EVENTO HA FINALIZADO<br>O NO ESTÁ ACTIVO</div>
+  <div class="cerrado-nombre" id="cerradoNombre"></div>
+</div>
 
 <!-- ══ LOGIN ══ -->
 <div class="screen" id="login">
@@ -557,12 +619,27 @@
   const urlParams = new URLSearchParams(window.location.search);
   eventoId = urlParams.get('evento') || '';
 
-  // Recuperar nombre y teléfono guardados
-  window.addEventListener('DOMContentLoaded', () => {
+  // Recuperar nombre y teléfono guardados y verificar evento activo
+  window.addEventListener('DOMContentLoaded', async () => {
     const savedName = localStorage.getItem('rallyges_username');
     if (savedName) document.getElementById('username').value = savedName;
     const savedPhone = localStorage.getItem('rallyges_telefono');
     if (savedPhone) document.getElementById('telefono').value = savedPhone;
+
+    // Verificar si el evento está activo
+    if (eventoId) {
+      try {
+        const res = await fetch(`${WORKER_URL}/evento-activo?evento=${encodeURIComponent(eventoId)}`);
+        const data = await res.json();
+        if (!data.activo) {
+          document.getElementById('login').classList.add('hidden');
+          document.getElementById('eventoCerrado').classList.remove('hidden');
+          document.getElementById('cerradoNombre').textContent = data.nombre || '';
+        }
+      } catch (e) {
+        // Si falla la verificación, dejamos pasar al login
+      }
+    }
   });
 
   const CIRCUMFERENCE = 2 * Math.PI * 80;
