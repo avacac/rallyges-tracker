@@ -118,6 +118,16 @@
     gap: 20px;
   }
 
+  .event-name {
+    font-size: 13px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--accent);
+    text-align: center;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+    letter-spacing: 0.5px;
+  }
+
   .field label {
     display: block;
     font-size: 11px;
@@ -524,6 +534,7 @@
   </div>
 
   <div class="card" id="configCard">
+    <div class="event-name" id="loginEventoNombre"></div>
     <div class="field">
       <label>Tu nombre / Alias / Función</label>
       <input type="text" id="username" placeholder="Escribe tu nombre..." autocomplete="off">
@@ -640,6 +651,8 @@
           document.getElementById('login').classList.add('hidden');
           document.getElementById('eventoCerrado').classList.add('visible');
           document.getElementById('cerradoNombre').textContent = data.nombre || '';
+        } else {
+          document.getElementById('loginEventoNombre').textContent = data.nombre || '';
         }
       } catch (e) {
         // Si falla la verificación, dejamos pasar al login
