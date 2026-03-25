@@ -630,7 +630,7 @@
     // Verificar si el evento está activo
     if (eventoId) {
       try {
-        const res = await fetch(`${WORKER_URL}/evento-activo?evento=${encodeURIComponent(eventoId)}`);
+        const res = await fetch(`${WORKER_URL}/evento-activo?evento=${encodeURIComponent(eventoId)}&t=${Date.now()}`);
         const data = await res.json();
         if (!data.activo) {
           document.getElementById('login').classList.add('hidden');
