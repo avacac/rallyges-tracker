@@ -434,6 +434,47 @@
 
   .btn-control.danger:hover { border-color: var(--warn); color: var(--warn); }
 
+  .btn-sos {
+    padding: 14px;
+    border-radius: 12px;
+    border: none;
+    background: #e63946;
+    font-family: 'Syne', sans-serif;
+    font-size: 15px;
+    font-weight: 800;
+    color: #ffffff;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: all 0.2s;
+  }
+  .btn-sos:hover { background: #c1121f; }
+  .btn-sos:active { transform: scale(0.97); }
+
+  .btn-averia {
+    padding: 14px;
+    border-radius: 12px;
+    border: none;
+    background: #ffd60a;
+    font-family: 'Syne', sans-serif;
+    font-size: 15px;
+    font-weight: 800;
+    color: #000000;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: all 0.2s;
+  }
+  .btn-averia:hover { background: #e6c000; }
+  .btn-averia:active { transform: scale(0.97); }
+
+  .emergency-row {
+    width: 100%;
+    max-width: 380px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 4px;
+  }
+
   .paused-badge {
     display: none;
     position: absolute;
@@ -530,7 +571,7 @@
     </div>
     <img src="260202 logo alargado.png" alt="RALLYGES">
     <h1>GPS Tracker</h1>
-    <p>© POWERED BY RALLYGES v2.3</p>
+    <p>© POWERED BY RALLYGES v2.4</p>
   </div>
 
   <div class="card" id="configCard">
@@ -543,7 +584,7 @@
       <label>Teléfono de Contacto</label>
       <input type="tel" id="telefono" placeholder="Escribe tu teléfono..." autocomplete="off">
     </div>
-    <button class="btn btn-primary" id="startBtn" onclick="startTracking()">INICIAR TRACKING</button>
+    <button class="btn btn-primary" id="startBtn" onclick="startTracking()">Iniciar tracking</button>
   </div>
 </div>
 
@@ -605,6 +646,11 @@
     <button class="btn-control danger" onclick="stopTracking()">✕ Salir</button>
   </div>
 
+  <div class="emergency-row">
+    <button class="btn-sos" onclick="reportarIncidente('SOS')">🆘 SOS</button>
+    <button class="btn-averia" onclick="reportarIncidente('AVERIA')">⚠️ AVERÍA</button>
+  </div>
+
   <div class="log-wrap">
     <div class="log-title">// registro de eventos</div>
     <div class="log" id="logContainer"></div>
@@ -625,6 +671,7 @@
   const intervalSec = 30;
 
   let username, eventoId, telefono;
+  let zonaControlId = null;
   let timerTick, countdownTick;
   let remaining = 0;
   let paused = false;
@@ -799,6 +846,7 @@
 
     let res;
     if (existing) {
+      zonaControlId = existing.id;
       res = await fetch(`${WORKER_URL}/actualizar/${existing.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -810,11 +858,58 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields })
       });
+      const created = await res.clone().json().catch(() => ({}));
+      if (created.id) zonaControlId = created.id;
     }
 
     if (!res.ok) {
       const d = await res.json().catch(() => ({}));
       throw new Error(d?.error?.message || `HTTP ${res.status}`);
+    }
+  }
+
+  async function reportarIncidente(tipo) {
+    if (!zonaControlId) {
+      alert('Aún no se ha registrado ninguna posición GPS. Espera al primer envío.');
+      return;
+    }
+
+    const confirmar = confirm(
+      tipo === 'SOS'
+        ? '🆘 ¿Confirmas el envío de una EMERGENCIA SOS?'
+        : '⚠️ ¿Confirmas el reporte de una AVERÍA?'
+    );
+    if (!confirmar) return;
+
+    const tipoIncidente = tipo === 'SOS' ? 'SOS-TRACKING' : 'AVERIA-TRACKING';
+    const detalles = tipo === 'SOS'
+      ? '‼️ EMERGENCIA SOS REGISTRADA DESDE LA APP DE TRACKING'
+      : '⚠️ EMERGENCIA DE AVERIA REGISTRADA DESDE LA APP DE TRACKING';
+
+    const body = {
+      tipo: tipoIncidente,
+      zonaControlId: zonaControlId,
+      usuario: username,
+      detalles: detalles
+    };
+
+    try {
+      const res = await fetch(`${WORKER_URL}/incidente`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (data.id) {
+        logEvent('warn', `${tipo} reportado correctamente (${data.id})`);
+        alert(tipo === 'SOS' ? '🆘 SOS enviado correctamente.' : '⚠️ Avería reportada correctamente.');
+      } else {
+        logEvent('error', `Error al reportar ${tipo}: ${JSON.stringify(data.error || data)}`);
+        alert('Error al enviar el reporte. Inténtalo de nuevo.');
+      }
+    } catch(e) {
+      logEvent('error', `Excepción al reportar ${tipo}: ${e.message}`);
+      alert('Error de conexión. Inténtalo de nuevo.');
     }
   }
 
