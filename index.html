@@ -883,8 +883,8 @@
 
     const tipoIncidente = tipo === 'SOS' ? 'SOS-TRACKING' : 'AVERIA-TRACKING';
     const detalles = tipo === 'SOS'
-      ? '‼️ EMERGENCIA SOS REGISTRADA DESDE LA APP DE TRACKING'
-      : '⚠️ EMERGENCIA DE AVERIA REGISTRADA DESDE LA APP DE TRACKING';
+      ? `‼️ EMERGENCIA SOS REGISTRADA DESDE LA APP DE TRACKING\n☎️ Teléfono de contacto: ${telefono}`
+      : `⚠️ EMERGENCIA DE AVERIA REGISTRADA DESDE LA APP DE TRACKING\n☎️ Teléfono de contacto: ${telefono}`;
 
     const body = {
       tipo: tipoIncidente,
