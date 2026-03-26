@@ -208,8 +208,8 @@
 
   .status-ring-wrap {
     position: relative;
-    width: 180px;
-    height: 180px;
+    width: 140px;
+    height: 140px;
     margin: 8px 0;
   }
 
@@ -225,8 +225,8 @@
     stroke: var(--accent);
     stroke-width: 4;
     stroke-linecap: round;
-    stroke-dasharray: 502;
-    stroke-dashoffset: 502;
+    stroke-dasharray: 390;
+    stroke-dashoffset: 390;
     transition: stroke-dashoffset 0.5s ease, stroke 0.4s;
     filter: drop-shadow(0 0 6px var(--accent));
   }
@@ -244,7 +244,7 @@
   }
 
   .ring-countdown {
-    font-size: 42px;
+    font-size: 34px;
     font-weight: 800;
     font-family: 'JetBrains Mono', monospace;
     color: var(--accent);
@@ -571,7 +571,7 @@
     </div>
     <img src="260202 logo alargado.png" alt="RALLYGES">
     <h1>GPS Tracker</h1>
-    <p>© POWERED BY RALLYGES v2.4</p>
+    <p>© POWERED BY RALLYGES v2.4.1</p>
   </div>
 
   <div class="card" id="configCard">
@@ -601,9 +601,9 @@
   </div>
 
   <div class="status-ring-wrap">
-    <svg viewBox="0 0 180 180">
-      <circle class="ring-track" cx="90" cy="90" r="80"/>
-      <circle class="ring-fill" id="ringFill" cx="90" cy="90" r="80"/>
+    <svg viewBox="0 0 140 140">
+      <circle class="ring-track" cx="70" cy="70" r="62"/>
+      <circle class="ring-fill" id="ringFill" cx="70" cy="70" r="62"/>
     </svg>
     <div class="ring-center">
       <div class="ring-countdown" id="countdown">—</div>
@@ -678,18 +678,15 @@
   let sendCount = 0;
   let lastCoords = null;
 
-  // Leer eventoId desde la URL (?evento=...)
   const urlParams = new URLSearchParams(window.location.search);
   eventoId = urlParams.get('evento') || '';
 
-  // Recuperar nombre y teléfono guardados y verificar evento activo
   window.addEventListener('DOMContentLoaded', async () => {
     const savedName = localStorage.getItem('rallyges_username');
     if (savedName) document.getElementById('username').value = savedName;
     const savedPhone = localStorage.getItem('rallyges_telefono');
     if (savedPhone) document.getElementById('telefono').value = savedPhone;
 
-    // Verificar si el evento está activo
     if (eventoId) {
       try {
         const res = await fetch(`${WORKER_URL}/evento-activo?evento=${encodeURIComponent(eventoId)}&t=${Date.now()}`);
@@ -701,13 +698,11 @@
         } else {
           document.getElementById('loginEventoNombre').textContent = data.nombre || '';
         }
-      } catch (e) {
-        // Si falla la verificación, dejamos pasar al login
-      }
+      } catch (e) {}
     }
   });
 
-  const CIRCUMFERENCE = 2 * Math.PI * 80;
+  const CIRCUMFERENCE = 2 * Math.PI * 62;
 
   function startTracking() {
     username = document.getElementById('username').value.trim();
@@ -723,7 +718,6 @@
       return;
     }
 
-    // Guardar nombre y teléfono para próximas visitas
     localStorage.setItem('rallyges_username', username);
     localStorage.setItem('rallyges_telefono', telefono);
 
@@ -833,7 +827,6 @@
       [FIELD_TIPO]:     'STAFF'
     };
 
-    // Buscar por la combinación usuario + evento
     const searchRes = await fetch(
       `${WORKER_URL}/buscar?usuario=${encodeURIComponent(username)}&evento=${encodeURIComponent(eventoId)}`
     );
