@@ -1,1 +1,373 @@
+// ── Cloudflare Worker — Proxy Airtable + Cron Anubesport ──
+// Variables de entorno necesarias en Cloudflare:
+//   AIRTABLE_API_KEY → API Key de Airtable (secret)
 
+const AIRTABLE_BASE_ID    = 'appHpq69PCT4qqYUL';
+const TABLE_ZONAS         = 'ZONAS DE CONTROL';
+const TABLE_EVENTO        = 'EVENTO';
+const ALLOWED_ORIGIN      = '*';
+
+// ── Campos Airtable ZONAS DE CONTROL ──
+const F_PUESTO            = 'PUESTO';
+const F_LOC_GPS           = 'LOC GPS';
+const F_TIMESTAMP         = 'TIMESTAMP';
+const F_TRAMOS            = 'TRAMOS';
+const F_DESCRIPCION       = 'DESCRIPCIÓN';
+const F_ES_POSICION       = 'ES POSICION USUARIO';
+const F_ORDEN             = 'ORDEN DE ZONA EN TRAMO';
+const F_TIPO_ZONA         = 'TIPO ZONA';
+const F_ID_EVENTO_GPS     = 'ID EVENTO GPS';
+
+// ── Campos Airtable EVENTO ──
+const F_EVENTO_NOMBRE     = 'NOMBRE DEL EVENTO';
+const F_EVENTO_ACTIVO     = 'ANUBE ACTIVO';
+const F_EVENTO_ID         = 'RecordID TRAMO INCIDENTES';
+const F_EVENTO_ID_ANUBE   = 'ID ANUBE';
+
+export default {
+
+  // ════════════════════════════════════════
+  // CRON — se ejecuta cada minuto
+  // ════════════════════════════════════════
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(syncParticipants(env));
+  },
+
+  // ════════════════════════════════════════
+  // HTTP — proxy para el HTML de staff
+  // ════════════════════════════════════════
+  async fetch(request, env) {
+    const corsHeaders = {
+      'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
+      'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    };
+
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { headers: corsHeaders });
+    }
+
+    const url = new URL(request.url);
+
+    try {
+
+      // ── GET /buscar?usuario=X&evento=Y ──
+      if (request.method === 'GET' && url.pathname === '/buscar') {
+        const usuario = url.searchParams.get('usuario');
+        const evento  = url.searchParams.get('evento');
+
+        if (!usuario || !evento) {
+          return json({ error: 'Faltan parámetros usuario o evento' }, 400, corsHeaders);
+        }
+
+        const filter = encodeURIComponent(
+          `AND({${F_PUESTO}}="${usuario}", {${F_ID_EVENTO_GPS}}="${evento}")`
+        );
+        const searchUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(TABLE_ZONAS)}?filterByFormula=${filter}`;
+        const res = await fetch(searchUrl, {
+          headers: { 'Authorization': `Bearer ${env.AIRTABLE_API_KEY}` }
+        });
+        const data = await res.json();
+        return json(data, res.status, corsHeaders);
+      }
+
+      // ── POST /crear ──
+      if (request.method === 'POST' && url.pathname === '/crear') {
+        const body = await request.json();
+        const f = body.fields;
+
+        const tipo      = f['Tipo'] || f['TIPO'] || '';
+        const usuario   = f['Usuario'] || '';
+        const coordStr  = f['COORDENADAS'] || '';
+        const timestamp = f['Timestamp'] || '';
+        const eventoId  = f['ID DEL EVENTO'] || '';
+        const telefono  = f['Teléfono de Contacto'] || '';
+
+        let fields;
+
+        if (tipo === 'STAFF') {
+          fields = {
+            [F_PUESTO]:        usuario,
+            [F_LOC_GPS]:       coordStr,
+            [F_TIMESTAMP]:     timestamp,
+            [F_TRAMOS]:        [eventoId],
+            [F_ID_EVENTO_GPS]: eventoId,
+            [F_ES_POSICION]:   true,
+            [F_ORDEN]:         1000,
+            [F_TIPO_ZONA]:     ['TRACKING STAFF'],
+            [F_DESCRIPCION]:   `☎️ TELÉFONO DE CONTACTO: ${telefono}`,
+          };
+        } else if (tipo === 'PARTICIPANTE') {
+          fields = buildParticipanteFields(f, eventoId, coordStr, timestamp);
+        } else {
+          return json({ error: 'Tipo desconocido' }, 400, corsHeaders);
+        }
+
+        const res = await airtableRequest(env, 'POST', TABLE_ZONAS, null, { fields });
+        const data = await res.json();
+        return json(data, res.status, corsHeaders);
+      }
+
+      // ── PATCH /actualizar/:id ──
+      if (request.method === 'PATCH' && url.pathname.startsWith('/actualizar/')) {
+        const recordId = url.pathname.split('/actualizar/')[1];
+        const body = await request.json();
+        const f = body.fields;
+
+        const fields = {
+          [F_LOC_GPS]:   f['COORDENADAS'] || f[F_LOC_GPS] || '',
+          [F_TIMESTAMP]: f['Timestamp']   || f[F_TIMESTAMP] || '',
+        };
+
+        const res = await airtableRequest(env, 'PATCH', TABLE_ZONAS, recordId, { fields });
+        const data = await res.json();
+        return json(data, res.status, corsHeaders);
+      }
+
+      // ── GET /evento-activo?evento=ID ──
+      if (request.method === 'GET' && url.pathname === '/evento-activo') {
+        const eventoId = url.searchParams.get('evento');
+        if (!eventoId) {
+          return json({ activo: false, nombre: '' }, 400, corsHeaders);
+        }
+        // El eventoId que viene del HTML es el RecordID del TRAMO
+        // Buscamos en EVENTO donde RecordID TRAMO INCIDENTES = eventoId
+        const filter = encodeURIComponent(`{RecordID TRAMO INCIDENTES}="${eventoId}"`);
+        const eventoUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(TABLE_EVENTO)}?filterByFormula=${filter}`;
+        const eventoRes = await fetch(eventoUrl, {
+          headers: { 'Authorization': `Bearer ${env.AIRTABLE_API_KEY}` }
+        });
+        const eventoData = await eventoRes.json();
+        const record = eventoData.records?.[0];
+        if (!record) {
+          return json({ activo: false, nombre: 'Evento no encontrado' }, 200, corsHeaders);
+        }
+        return json({
+          activo: record.fields[F_EVENTO_ACTIVO] === true,
+          nombre: record.fields[F_EVENTO_NOMBRE] || ''
+        }, 200, corsHeaders);
+      }
+
+      // ── GET /sync-manual ──
+      if (request.method === 'GET' && url.pathname === '/sync-manual') {
+        await syncParticipants(env);
+        return json({ ok: true, message: 'Sync completado' }, 200, corsHeaders);
+      }
+
+      return json({ error: 'Ruta no encontrada' }, 404, corsHeaders);
+
+    } catch (err) {
+      return json({ error: err.message }, 500, corsHeaders);
+    }
+  }
+};
+
+// ════════════════════════════════════════
+// SYNC — consulta eventos activos y vuelca participantes en ZONAS DE CONTROL
+// ════════════════════════════════════════
+async function syncParticipants(env) {
+  const filter = encodeURIComponent(`{${F_EVENTO_ACTIVO}}=1`);
+  const eventosUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(TABLE_EVENTO)}?filterByFormula=${filter}`;
+
+  const eventosRes = await fetch(eventosUrl, {
+    headers: { 'Authorization': `Bearer ${env.AIRTABLE_API_KEY}` }
+  });
+  const eventosData = await eventosRes.json();
+  const eventos = eventosData.records || [];
+
+  if (eventos.length === 0) return;
+
+  for (const evento of eventos) {
+    const idAirtable = evento.fields[F_EVENTO_ID];
+    const idAnube    = evento.fields[F_EVENTO_ID_ANUBE];
+    const nombre     = evento.fields[F_EVENTO_NOMBRE] || idAirtable;
+
+    if (!idAirtable || !idAnube) continue;
+
+    try {
+      // 1. Obtener participantes de Anubesport
+      const anubeUrl = `https://rest.anube.es/rallyrest/default/api/participants/${idAnube}.json?rally=rally${idAnube}&port=auto`;
+      const anubeRes = await fetch(anubeUrl);
+      const anubeData = await anubeRes.json();
+      const participantes = anubeData?.event?.data?.participants || [];
+
+      // 2. Deduplicar participantes por dorsal
+      const participantesMap = {};
+      for (const p of participantes) {
+        participantesMap[String(p.dorsal)] = p;
+      }
+      const participantesFiltrados = Object.values(participantesMap);
+
+      // 3. Obtener todos los registros existentes de este evento en ZONAS DE CONTROL
+      const existingMap = await getExistingZonas(env, idAirtable);
+
+      // 4. Separar participantes en nuevos y existentes
+      const toCreate = [];
+      const toUpdate = [];
+
+      for (const p of participantesFiltrados) {
+        const dorsal    = String(p.dorsal);
+        const coordStr  = `${p.latitude},${p.longitude}`;
+        const timestamp = new Date(p.unixtime_gps * 1000).toISOString();
+        const key       = `${dorsal}|${idAirtable}`;
+
+        if (existingMap[key]) {
+          toUpdate.push({
+            id: existingMap[key],
+            fields: {
+              [F_LOC_GPS]:   coordStr,
+              [F_TIMESTAMP]: timestamp,
+            }
+          });
+        } else {
+          toCreate.push({
+            fields: {
+              [F_PUESTO]:        dorsal,
+              [F_LOC_GPS]:       coordStr,
+              [F_TIMESTAMP]:     timestamp,
+              [F_TRAMOS]:        [idAirtable],
+              [F_ID_EVENTO_GPS]: idAirtable,
+              [F_ES_POSICION]:   true,
+              [F_ORDEN]:         2000,
+              [F_TIPO_ZONA]:     ['TRACKING PARTICIPANTES'],
+              [F_DESCRIPCION]:   buildDescripcionParticipante(dorsal, p),
+            }
+          });
+        }
+      }
+
+      // 5. Procesar en lotes de 10 (límite de la API de Airtable)
+      await processBatch(env, toCreate, 'POST');
+      await processBatch(env, toUpdate, 'PATCH');
+
+    } catch (err) {
+      console.error(`Error sincronizando evento ${nombre}:`, err.message);
+    }
+  }
+}
+
+// Obtiene todos los registros existentes del evento y devuelve un mapa dorsal|evento -> recordId
+async function getExistingZonas(env, idAirtable) {
+  const map = {};
+  let offset = null;
+
+  do {
+    const filter = encodeURIComponent(`{${F_ID_EVENTO_GPS}}="${idAirtable}"`);
+    const fields = `fields%5B%5D=${encodeURIComponent(F_PUESTO)}&fields%5B%5D=${encodeURIComponent(F_ID_EVENTO_GPS)}`;
+    let url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(TABLE_ZONAS)}?filterByFormula=${filter}&${fields}&pageSize=100`;
+    if (offset) url += `&offset=${encodeURIComponent(offset)}`;
+
+    const res = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${env.AIRTABLE_API_KEY}` }
+    });
+    const data = await res.json();
+
+    for (const record of (data.records || [])) {
+      const puesto = record.fields[F_PUESTO];
+      const evento = record.fields[F_ID_EVENTO_GPS];
+      if (puesto && evento) {
+        map[`${puesto}|${evento}`] = record.id;
+      }
+    }
+
+    offset = data.offset || null;
+  } while (offset);
+
+  return map;
+}
+
+// Procesa en lotes de 10
+async function processBatch(env, records, method) {
+  const BATCH_SIZE = 10;
+  for (let i = 0; i < records.length; i += BATCH_SIZE) {
+    const batch = records.slice(i, i + BATCH_SIZE);
+    const baseUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(TABLE_ZONAS)}`;
+
+    if (method === 'POST') {
+      await fetch(baseUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${env.AIRTABLE_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ records: batch })
+      });
+    } else if (method === 'PATCH') {
+      await fetch(baseUrl, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${env.AIRTABLE_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ records: batch })
+      });
+    }
+  }
+}
+
+// ════════════════════════════════════════
+// HELPERS
+// ════════════════════════════════════════
+function buildDescripcionParticipante(dorsal, p) {
+  return `DATOS PARTICIPANTE - ${dorsal}
+____________________________________________________
+PILOTO: ${p.piloto || ''}
+COPILOTO: ${p.copiloto || ''}
+VEHÍCULO: ${p.vehiculo_modelo || ''}
+VEHICULO AÑO: ${p.vehiculo_anho || ''}
+CLUB: ${p.club || ''}
+CLASE: ${p.clase || ''}
+CATEGORÍA: ${p.categoria || ''}
+VELOCIDAD: ${p.speed || '0'}
+RUMBO: ${p.bearing || '0'}
+ESTADO: ${p.state || ''}
+GRUPO: ${p.grupo || ''}
+____________________________________________________`;
+}
+
+function buildParticipanteFields(f, eventoId, coordStr, timestamp) {
+  return {
+    [F_PUESTO]:        f['Usuario'] || '',
+    [F_LOC_GPS]:       coordStr,
+    [F_TIMESTAMP]:     timestamp,
+    [F_TRAMOS]:        [eventoId],
+    [F_ID_EVENTO_GPS]: eventoId,
+    [F_ES_POSICION]:   true,
+    [F_ORDEN]:         2000,
+    [F_TIPO_ZONA]:     ['TRACKING PARTICIPANTES'],
+    [F_DESCRIPCION]:   `DATOS PARTICIPANTE - ${f['Usuario'] || ''}
+____________________________________________________
+PILOTO: ${f['piloto'] || ''}
+COPILOTO: ${f['copiloto'] || ''}
+VEHÍCULO: ${f['vehiculo_modelo'] || ''}
+VEHICULO AÑO: ${f['vehiculo_año'] || ''}
+CLUB: ${f['club'] || ''}
+CLASE: ${f['clase'] || ''}
+CATEGORÍA: ${f['categoria'] || ''}
+VELOCIDAD: ${f['speed'] || '0'}
+RUMBO: ${f['bearing'] || '0'}
+ESTADO: ${f['state'] || ''}
+GRUPO: ${f['grupo'] || ''}
+____________________________________________________`,
+  };
+}
+
+async function airtableRequest(env, method, table, recordId, body) {
+  const base = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(table)}`;
+  const url  = recordId ? `${base}/${recordId}` : base;
+  return fetch(url, {
+    method,
+    headers: {
+      'Authorization': `Bearer ${env.AIRTABLE_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+}
+
+function json(data, status = 200, headers = {}) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'Content-Type': 'application/json', ...headers }
+  });
+}
