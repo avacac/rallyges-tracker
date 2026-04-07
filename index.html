@@ -781,7 +781,7 @@
       const coordStr = `${lat},${lng}`;
       const now = new Date().toISOString();
 
-      setStatus('sending', 'Enviando a Airtable...');
+      setStatus('sending', 'Enviando a RALLYGES...');
       logEvent('info', `Coord: ${coordStr.substring(0,20)}...`);
 
       await pushToAirtable(coordStr, now);
